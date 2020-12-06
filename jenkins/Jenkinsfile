@@ -1,0 +1,192 @@
+def VERSION_MAJOR = '1'
+def VERSION_MINOR = '0'
+
+pipeline {
+   agent any
+
+   environment {
+      VERSION = "${VERSION_MAJOR}.${VERSION_MINOR}.${BUILD_ID}"
+   }
+
+   stages {
+      stage('preamble') {
+         steps {
+            sh 'echo "$VERSION"'
+         }
+      }
+
+      stage('build docker image') {
+         steps {
+            // the openshiftBuild function will not work because the SSL certificate in openshift has expired
+            // openshiftBuild(bldCfg: 'transcript-ordering-platform', showBuildLogs: 'true')
+            script {
+               openshift.withCluster() {
+                  openshift.withProject() {
+                     // Find the build configuration associated to the application ...
+                     def buildconfigs = openshift.selector('bc', 'transcript-api-dotnet5')
+                     echo "Found ${buildconfigs.count()} buildconfigs: ${buildconfigs.names()}"
+
+                     echo "APP_VERSION:$VERSION"
+
+                     // Kick off any builds in parallel ...
+                     def builds = buildconfigs.startBuild("--env=APP_VERSION=$VERSION")
+                     // triggerBuild("$VERSION")
+                     echo "Started ${builds.count()} builds: ${builds.names()}"
+
+                     def WAIT_TIMEOUT = 5
+                     timeout(WAIT_TIMEOUT) {
+                        // Wait for all the builds to complete ...
+                        // This section will exit after the last build completes.
+                        echo 'Waiting for builds to complete ...'
+                        builds.withEach {
+                           // untilEach and watch - do not support watching multiple named resources,
+                           // so we have to feed it one at a time.
+                           it.untilEach(1) {
+                              echo "${it.object().status.phase} - ${it.name()}"
+
+                              builtResult = it.object().status.phase
+                              buildName = it.name()
+
+                              return (it.object().status.phase == 'Failed' || it.object().status.phase == 'Complete')
+                           }
+                        }
+                     }
+
+                     if (builtResult == 'Failed') {
+                        // slackSend channel: '#filing-gitlab',
+                        //color: COLOR_MAP[currentBuild.currentResult],
+                        //   color: 'danger',
+                        //   message: "Build failed  -  Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+                        error('Build failed due to either a compilation error or a failed unit test(s).')
+                  } else {
+                        // tag version number
+                        echo 'Building docker image complete ...'
+                        def IMAGE_HASH = getImageTagHash('transcript-api-dotnet5', 'build')
+                        echo "IMAGE_HASH: ${IMAGE_HASH}"
+                        openshift.tag("transcript-api-dotnet5@${IMAGE_HASH}", "transcript-api-dotnet5:$VERSION")
+                        echo "Tagging docker image complete (transcript-api-dotnet5:$VERSION) ..."
+                     }
+                  }
+               }
+            }
+         }
+      }
+
+//       stage('dotnet restore') {
+//          steps {
+//             sh(script: 'dotnet restore Transcript.sln', returnStdout: true)
+//          }
+//       }
+
+//       stage('compile') {
+//          steps {
+//             //  echo 'Notify GitLab'
+//             //  updateGitlabCommitStatus name: 'build', state: 'pending'
+//             echo 'build step goes here'
+//             sh(script: 'dotnet build Transcript.API/Transcript.API.csproj -c Release -o ./dist', returnStdout: true)
+//          //  updateGitlabCommitStatus name: 'build', state: 'success'
+//          }
+//       }
+
+//       stage('unit test') {
+//          steps {
+//                // echo 'Notify GitLab'
+//                //    updateGitlabCommitStatus name: 'test', state: 'pending'
+//                echo 'test step goes here'
+//                sh(script: 'dotnet test Transcript.API.Tests/Transcript.API.Tests.csproj -c Release --results-directory ./test-results --collect "Code Coverage" --logger xunit'
+// , returnStdout: true)
+//          //    updateGitlabCommitStatus name: 'test', state: 'success'
+//          }
+//       }
+
+   //    stage('DEV deploy') {
+   //       steps {
+   //          // openshiftDeploy(depCfg: 'transcript-ordering-platform')
+   //          script {
+   //             openshift.withCluster() {
+   //                openshift.withProject() {
+   //                   echo 'Tagging transcript-ordering-platform for deployment to dev} ...'
+
+   //                   // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+   //                   // Tag the images for deployment based on the image's hash
+   //                   def IMAGE_HASH = getImageTagHash('transcript-ordering-platform', 'build')
+   //                   echo "IMAGE_HASH: ${IMAGE_HASH}"
+   //                   openshift.tag("transcript-ordering-platform@${IMAGE_HASH}", 'transcript-ordering-platform:dev')
+   //                }
+
+   //                // dc.rollout() does not deploy new version of the image stream
+   //                // openshift.withProject("${NAME_SPACE}-${DEP_ENV_NAMES[0]}") {
+   //                //    def dc = openshift.selector('dc', 'transcript-ordering-platform')
+   //                //    echo "Found ${dc.count()} buildconfigs: ${dc.names()}"
+   //                //    // Wait for the deployment to complete.
+   //                //    // This will wait until the desired replicas are all available
+   //                //    dc.rollout().status()
+   //                // }
+
+   //                echo 'DEV Deployment Started...'
+   //             // slackSend channel: '#filing-gitlab',
+   //             //color: COLOR_MAP[currentBuild.currentResult],
+   //             //   color: 'good',
+   //             //   message: "Deployment Complete -  Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+   //             }
+   //          }
+   //       }
+   //    }
+
+   //    stage('UAT deployment approval') {
+   //       // no agent, so executors are not used up when waiting for approvals
+   //       agent none
+   //       steps {
+   //          script {
+   //             input id: 'DevDeploymentApproval', message: 'Deploy to UAT?'
+   //          }
+   //       }
+   //    }
+
+   //    stage('UAT deploy') {
+   //       steps {
+   //          script {
+   //             openshift.withCluster() {
+   //                openshift.withProject() {
+   //                   echo 'Tagging transcript-ordering-platform for deployment to dev} ...'
+
+   //                   // Don't tag with BUILD_ID so the pruner can do it's job; it won't delete tagged images.
+   //                   // Tag the images for deployment based on the image's hash
+   //                   def IMAGE_HASH = getImageTagHash('transcript-ordering-platform', 'dev')
+   //                   echo "IMAGE_HASH: ${IMAGE_HASH}"
+   //                   openshift.tag("transcript-ordering-platform@${IMAGE_HASH}", 'transcript-ordering-platform:uat')
+   //                }
+
+   //                echo 'UAT Deployment Started...'
+   //             // slackSend channel: '#filing-gitlab',
+   //             //color: COLOR_MAP[currentBuild.currentResult],
+   //             //   color: 'good',
+   //             //   message: "Deployment Complete -  Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+   //             }
+   //          }
+   //       }
+   //    }
+   }
+   post {
+      always {
+         xunit (
+             thresholds: [ skipped(failureThreshold: '0'), failed(failureThreshold: '0') ],
+             tools: [ xUnitDotNet(pattern: '**/TestResults.xml') ]
+         )
+      }
+   }
+}
+
+// Get an image's hash tag
+String getImageTagHash(String imageName, String tag = '') {
+   if (!tag?.trim()) {
+      tag = 'latest'
+   }
+
+   def istag = openshift.raw("get istag ${imageName}:${tag} -o template --template='{{.image.dockerImageReference}}'")
+   return istag.out.tokenize('@')[1].trim()
+}
+
+void triggerBuild(String version) {
+   openshift.raw("start-build transcript-ordering-platform --wait --env=APP_VERSION=${version}")
+}

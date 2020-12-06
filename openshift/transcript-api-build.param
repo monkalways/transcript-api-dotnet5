@@ -1,0 +1,18 @@
+#=========================================================
+# OpenShift template parameters for:
+# Component: transcript-sample-api
+# Template File: openshift/templates/transcript-api/transcript-api-build.yaml
+#=========================================================
+NAME=transcript-ordering-platform
+APP_NAME=transcript-api-dotnet5
+GIT_REPO_URL=https://github.com/monkalways/transcript-api-dotnet5.git
+GIT_SECRET=gitlab-transcript-ordering-platform-deploytoken
+GIT_REF=master
+SOURCE_CONTEXT_DIR=/
+SOURCE_IMAGE_KIND=ImageStreamTag
+SOURCE_IMAGE_NAME=s2i-dotnet5build-image
+SOURCE_IMAGE_TAG=latest
+OUTPUT_IMAGE_TAG=build
+JENKINSFILE_PATH=jenkins/Jenkinsfile
+GITLAB_WEBHOOK=gitlab-transcript-sandbox
+OPENSHIFT_PROJECT=wei-sandbox
