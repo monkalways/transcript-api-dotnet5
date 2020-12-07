@@ -30,20 +30,27 @@ objects:
         contextDir: "${SOURCE_CONTEXT_DIR}"
         # sourceSecret:
         #   name: ${GIT_SECRET}
+      # strategy:
+      #   type: Source
+      #   sourceStrategy:
+      #     env:
+      #       - name: DOTNET_STARTUP_PROJECT
+      #         value: TranscriptSandbox.API
+      #       - name: APP_VERSION
+      #         value: ${APP_VERSION}
+      #     # - name: DOTNET_TEST_PROJECTS
+      #     #   value: tests/jsg-filing-surrogate-api.tests/jsg-filing-surrogate-api.tests.csproj
+      #     from:
+      #       kind: "${SOURCE_IMAGE_KIND}"
+      #       name: "${SOURCE_IMAGE_NAME}:${SOURCE_IMAGE_TAG}"
+      #       namespace: openshift
       strategy:
-        type: Source
-        sourceStrategy:
-          env:
-            - name: DOTNET_STARTUP_PROJECT
-              value: TranscriptSandbox.API
-            - name: APP_VERSION
-              value: ${APP_VERSION}
-          # - name: DOTNET_TEST_PROJECTS
-          #   value: tests/jsg-filing-surrogate-api.tests/jsg-filing-surrogate-api.tests.csproj
+        dockerStrategy:
           from:
-            kind: "${SOURCE_IMAGE_KIND}"
-            name: "${SOURCE_IMAGE_NAME}:${SOURCE_IMAGE_TAG}"
+            kind: ImageStreamTag
+            name: ${SOURCE_IMAGE_NAME}:${SOURCE_IMAGE_TAG}
             namespace: wei-sandbox
+        type: Docker
       output:
         to:
           kind: ImageStreamTag
