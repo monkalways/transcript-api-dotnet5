@@ -26,5 +26,11 @@ namespace TranscriptSandbox.API.Controllers
             var workflowId = await WorkflowService.StartWorkflow("TestWorkflow");
             return $"TestWorkflow ({workflowId}) started";
         }
+
+        [HttpGet("/api/version")]
+        public string GetVersion()
+        {
+            return "0.0.123";
+        }
     }
 }
