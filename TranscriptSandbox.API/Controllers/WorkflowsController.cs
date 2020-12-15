@@ -25,7 +25,7 @@ namespace TranscriptSandbox.API.Controllers
         [HttpGet("/api/version")]
         public string GetVersion()
         {
-            return "0.0.124";
+            return "0.0.1";
         }
     }
 }
